@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>日本全国サウナMAP</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="サウナ部の活動報告フォームを集計した、全国サウナ・温泉施設の地図付きレポート集(Leaflet+OpenStreetMap版)" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><text y=%2220%22 font-size=%2220%22>🧖</text></svg>" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  :root {
+    --bg: #eef2f7;
+    --surface: #ffffff;
+    --surface-2: #e1e9f1;
+    --ink: #16212c;
+    --ink-muted: #55677a;
+    --border: #c9d7e3;
+    --accent: #1c5fae;
+    --accent-strong: #123f78;
+    --warn: #a8451c;
+    --warn-strong: #7d3212;
+    --ramp-0: #e1e9f1;
+    --ramp-1: #83aedb;
+    --ramp-2: #5c93cf;
+    --ramp-3: #3877bd;
+    --ramp-4: #1c5fae;
+    --good: #1a7a4c;
+    --bad: #a8451c;
+    --shadow: 0 1px 2px rgba(22, 33, 44, 0.06), 0 6px 20px rgba(22, 33, 44, 0.07);
+    --radius: 14px;
+    --serif: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "游明朝体", "HG明朝E", serif;
+    --sans: "Yu Gothic", "YuGothic", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Meiryo", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1420;
+      --surface: #16202c;
+      --surface-2: #1c2836;
+      --ink: #eaf0f6;
+      --ink-muted: #93a3b3;
+      --border: #2a3a4a;
+      --accent: #6fb3ff;
+      --accent-strong: #9ccbff;
+      --warn: #ff9a5c;
+      --warn-strong: #ffb587;
+      --ramp-0: #1c2836;
+      --ramp-1: #2c4a6e;
+      --ramp-2: #3f6690;
+      --ramp-3: #5490c4;
+      --ramp-4: #6fb3ff;
+      --good: #4fd68a;
+      --bad: #ff9a5c;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  a:hover { color: var(--accent-strong); }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 20px 20px 64px; }
+
+  header.top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 8px 4px 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title-block .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 0 0 6px;
+  }
+  .title-block h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(28px, 4vw, 40px);
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: 0.02em;
+  }
+  .title-block p.desc {
+    margin: 10px 0 0;
+    color: var(--ink-muted);
+    font-size: 14px;
+    max-width: 62ch;
+  }
+  .stat-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .stat-tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 18px;
+    min-width: 92px;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .stat-tile .num {
+    font-family: var(--serif);
+    font-size: 24px;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    display: block;
+  }
+  .stat-tile .lbl { font-size: 11px; color: var(--ink-muted); letter-spacing: 0.04em; }
+
+  main.layout {
+    display: grid;
+    grid-template-columns: minmax(320px, 46%) 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    main.layout { grid-template-columns: 1fr; }
+  }
+
+  .map-panel {
+    position: sticky;
+    top: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px;
+  }
+  @media (max-width: 860px) {
+    .map-panel { position: static; }
+  }
+  .map-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .map-head h2 { font-family: var(--serif); font-size: 16px; margin: 0; font-weight: 600; }
+  #map-status { font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+  #map-status b { color: var(--ink); font-weight: 600; }
+  #map {
+    width: 100%;
+    height: 560px;
+    border-radius: 10px;
+    background: var(--surface-2);
+  }
+  .leaflet-popup-content-wrapper { background: var(--surface); color: var(--ink); border-radius: 10px; }
+  .leaflet-popup-tip { background: var(--surface); }
+  .popup-title { font-family: var(--serif); font-weight: 600; font-size: 14px; margin: 0 0 4px; }
+  .popup-title a { color: var(--ink); }
+  .popup-tags { font-size: 11.5px; color: var(--ink-muted); margin: 0 0 6px; }
+  .popup-rating svg { width: 16px; height: 16px; }
+  .popup-rating .on { fill: var(--accent); }
+  .popup-rating .off { fill: none; stroke: var(--border); stroke-width: 1.5; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 11px; color: var(--ink-muted); }
+  .legend .group { display: flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background: var(--accent); border: 1.4px solid #fff; }
+  .map-note { margin-top: 10px; font-size: 11px; color: var(--ink-muted); }
+
+  .list-panel { min-width: 0; }
+  .filter-bar {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; box-shadow: var(--shadow);
+  }
+  .filter-bar input[type="search"], .filter-bar select {
+    font-family: var(--sans); font-size: 14px; padding: 8px 10px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--ink);
+  }
+  .filter-bar input[type="search"] { flex: 1 1 200px; min-width: 160px; }
+  .filter-bar select { flex: 0 0 auto; }
+  .filter-bar button {
+    font-family: var(--sans); font-size: 13px; padding: 8px 14px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); cursor: pointer;
+  }
+  .filter-bar button:hover { border-color: var(--accent); color: var(--accent-strong); }
+  .filter-bar button:focus-visible, .filter-bar input:focus-visible, .filter-bar select:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  #result-count { font-size: 12px; color: var(--ink-muted); margin: 0 0 12px 2px; font-variant-numeric: tabular-nums; }
+
+  .cards { display: flex; flex-direction: column; gap: 14px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px; box-shadow: var(--shadow); scroll-margin-top: 16px;
+    transition: border-color 0.4s ease, box-shadow 0.4s ease;
+  }
+  .card.is-flash { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .card-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .card-title { font-family: var(--serif); font-size: 17px; font-weight: 600; margin: 0; }
+  .card-title a { color: inherit; text-decoration: none; }
+  .card-title a:hover { color: var(--accent-strong); }
+  .card-tags { font-size: 12px; color: var(--ink-muted); margin: 4px 0 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .card-tags .pref-tag { color: var(--accent); font-weight: 600; }
+  .rating-block { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+  .rating-label { font-size: 10px; letter-spacing: 0.06em; color: var(--ink-muted); }
+  .rating { display: flex; align-items: center; gap: 2px; }
+  .rating svg { width: 27px; height: 27px; }
+  .rating .on { fill: var(--accent); }
+  .rating .off { fill: none; stroke: var(--border); stroke-width: 1.5; }
+  .rating-num { font-size: 13px; font-weight: 600; color: var(--accent); margin-left: 3px; font-variant-numeric: tabular-nums; }
+  .card-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-muted); margin-top: 10px; font-variant-numeric: tabular-nums; }
+  .gmap-link { font-size: 11.5px; font-weight: 600; color: var(--accent); text-decoration: none; white-space: nowrap; }
+  .gmap-link:hover { color: var(--accent-strong); text-decoration: underline; }
+  .card-body { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+  @media (max-width: 480px) { .card-body { grid-template-columns: 1fr; } }
+  .card-body h4 { font-size: 11px; letter-spacing: 0.06em; margin: 0 0 6px; font-weight: 600; }
+  .card-body .good h4 { color: var(--good); }
+  .card-body .bad h4 { color: var(--bad); }
+  .card-body ul { margin: 0; padding-left: 16px; font-size: 13px; }
+  .card-body li { margin-bottom: 3px; }
+  .card-body li::marker { color: var(--ink-muted); }
+
+  .empty-state {
+    text-align: center; padding: 48px 16px; color: var(--ink-muted);
+    background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); font-size: 14px;
+  }
+
+  footer.credit {
+    margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border);
+    font-size: 11.5px; color: var(--ink-muted); display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="title-block">
+      <p class="eyebrow">SAUNA CLUB FIELD REPORTS</p>
+      <h1>日本全国サウナMAP</h1>
+      <p class="desc">部員の活動報告フォームから集計した、全国のサウナ・温泉施設レポート集。実際の地図(OpenStreetMap)上のピンかリストから気になる一軒を探せます。</p>
+    </div>
+    <div class="stat-row" id="stat-row"></div>
+  </header>
+
+  <main class="layout">
+    <section class="map-panel">
+      <div class="map-head">
+        <h2>掲載エリア</h2>
+        <span id="map-status">全国 <b id="map-status-count">0</b> 件</span>
+      </div>
+      <div id="map"></div>
+      <div class="legend">
+        <div class="group"><span class="swatch" style="background:var(--ramp-0)"></span>0件</div>
+        <div class="group"><span class="swatch" style="background:var(--ramp-1)"></span>1件</div>
+        <div class="group"><span class="swatch" style="background:var(--ramp-2)"></span>2〜3件</div>
+        <div class="group"><span class="swatch" style="background:var(--ramp-3)"></span>4〜6件</div>
+        <div class="group"><span class="swatch" style="background:var(--ramp-4)"></span>7件〜</div>
+        <div class="group"><span class="dot"></span>施設ピン</div>
+      </div>
+      <p class="map-note">実際のストリートマップです。ホイールでズーム、ドラッグで移動できます。都道府県をクリックすると拡大＋一覧を絞り込みます。</p>
+    </section>
+
+    <section class="list-panel">
+      <div class="filter-bar">
+        <select id="pref-select" aria-label="都道府県で絞り込み"></select>
+        <input type="search" id="search-input" placeholder="施設名・地域・投稿者で検索" aria-label="検索" />
+        <select id="sort-select" aria-label="並び替え">
+          <option value="date-desc">新着順</option>
+          <option value="rating-desc">イキタイ度が高い順</option>
+          <option value="name-asc">施設名順</option>
+        </select>
+        <button type="button" id="reset-btn">絞り込み解除</button>
+      </div>
+      <p id="result-count"></p>
+      <div class="cards" id="cards"></div>
+      <div class="empty-state" id="empty-state" hidden>該当するサウナが見つかりませんでした。条件を変えてお試しください。</div>
+    </section>
+  </main>
+
+  <footer class="credit">
+    <span>出典: サウナ部 活動報告フォーム回答 ／ 地図データ: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors ／ 更新はClaudeに新しいCSVを渡して再デプロイします</span>
+    <span id="updated-at">最終更新: 2026年9月22日</span>
+  </footer>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(function () {
+  "use strict";
+
+  var map = L.map("map", { scrollWheelZoom: true }).setView([37.5, 138.5], 5);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  var state = { pref: "", query: "", sort: "date-desc" };
+  var saunas = [];
+  var counts = {};
+  var prefLayer = null;
+  var prefLayers = {};
+  var markerById = {};
+  var prefSelect = document.getElementById("pref-select");
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function bucketStyle(count) {
+    if (count <= 0) return { fillColor: getVar("--ramp-0"), fillOpacity: 0.25 };
+    if (count === 1) return { fillColor: getVar("--ramp-1"), fillOpacity: 0.55 };
+    if (count <= 3) return { fillColor: getVar("--ramp-2"), fillOpacity: 0.6 };
+    if (count <= 6) return { fillColor: getVar("--ramp-3"), fillOpacity: 0.68 };
+    return { fillColor: getVar("--ramp-4"), fillOpacity: 0.78 };
+  }
+  function getVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  var DROP_PATH = "M12 2.4C12 2.4 5.2 11.3 5.2 16.1C5.2 19.9 8.25 23 12 23C15.75 23 18.8 19.9 18.8 16.1C18.8 11.3 12 2.4 12 2.4Z";
+  function dropIcon(on) {
+    return '<svg viewBox="0 0 24 24" class="' + (on ? "on" : "off") + '"><path d="' + DROP_PATH + '"/></svg>';
+  }
+  function ratingHtml(n, cls) {
+    var out = "";
+    for (var i = 1; i <= 5; i++) out += dropIcon(i <= n);
+    return '<div class="' + cls + '">' + out + '</div>';
+  }
+
+  function renderPrefLayer() {
+    if (prefLayer) map.removeLayer(prefLayer);
+    prefLayers = {};
+    fetch("japan-prefectures.geojson").then(function (r) { return r.json(); }).then(function (gj) {
+      prefLayer = L.geoJSON(gj, {
+        style: function (feature) {
+          var count = counts[feature.properties.name] || 0;
+          var s = bucketStyle(count);
+          return { color: "#ffffff", weight: 0.8, opacity: 0.7, fillColor: s.fillColor, fillOpacity: s.fillOpacity };
+        },
+        onEachFeature: function (feature, layer) {
+          var name = feature.properties.name;
+          prefLayers[name] = layer;
+          var count = counts[name] || 0;
+          layer.bindTooltip(name + " ・ " + count + "件");
+          layer.on("click", function () { toggleFilter(name); });
+          layer.on("mouseover", function () { layer.setStyle({ weight: 2, color: getVar("--accent-strong") }); });
+          layer.on("mouseout", function () {
+            layer.setStyle({ weight: state.pref === name ? 2.4 : 0.8, color: state.pref === name ? getVar("--accent-strong") : "#ffffff" });
+          });
+        }
+      }).addTo(map);
+    });
+  }
+
+  function renderMarkers() {
+    Object.values(markerById).forEach(function (m) { map.removeLayer(m); });
+    markerById = {};
+    saunas.forEach(function (s) {
+      if (!s.lat || !s.lng) return;
+      var marker = L.circleMarker([s.lat, s.lng], {
+        radius: 7, color: "#fff", weight: 2, fillColor: getVar("--accent"), fillOpacity: 1
+      });
+      var popup = '<p class="popup-title"><a href="' + escapeHtml(s.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(s.name) + "</a></p>" +
+        '<p class="popup-tags">' + escapeHtml(s.pref) + " ・ " + escapeHtml(s.region) + "</p>" +
+        ratingHtml(s.rating, "popup-rating");
+      marker.bindPopup(popup);
+      marker.on("click", function () { focusCard(s.id); });
+      marker.addTo(map);
+      markerById[s.id] = marker;
+    });
+  }
+
+  function setStatus(text) {
+    var el = document.getElementById("map-status");
+    el.innerHTML = text ? text.replace(/(\d+)件$/, "<b>$1</b>件") : (state.pref ? state.pref + " ・ <b>" + (counts[state.pref] || 0) + "</b> 件" : "全国 ・ <b>" + saunas.length + "</b> 件");
+  }
+
+  function applyFilterState(name) {
+    state.pref = name;
+    prefSelect.value = state.pref;
+    Object.keys(prefLayers).forEach(function (n) {
+      prefLayers[n].setStyle({ weight: state.pref === n ? 2.4 : 0.8, color: state.pref === n ? getVar("--accent-strong") : "#ffffff" });
+    });
+    setStatus();
+    renderCards();
+    if (state.pref && prefLayers[state.pref]) {
+      map.fitBounds(prefLayers[state.pref].getBounds(), { padding: [24, 24] });
+    } else {
+      map.setView([37.5, 138.5], 5);
+    }
+  }
+  function toggleFilter(name) {
+    applyFilterState(state.pref === name ? "" : name);
+  }
+
+  prefSelect.addEventListener("change", function () { applyFilterState(prefSelect.value); });
+
+  document.getElementById("search-input").addEventListener("input", function (e) { state.query = e.target.value.trim(); renderCards(); });
+  document.getElementById("sort-select").addEventListener("change", function (e) { state.sort = e.target.value; renderCards(); });
+  document.getElementById("reset-btn").addEventListener("click", function () {
+    document.getElementById("search-input").value = "";
+    state.query = "";
+    applyFilterState("");
+  });
+
+  function matches(s) {
+    if (state.pref && s.pref !== state.pref) return false;
+    if (!state.query) return true;
+    var q = state.query.toLowerCase();
+    return [s.name, s.pref, s.region, s.poster].join(" ").toLowerCase().indexOf(q) !== -1;
+  }
+  function sortList(list) {
+    var l = list.slice();
+    if (state.sort === "date-desc") l.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    else if (state.sort === "rating-desc") l.sort(function (a, b) { return b.rating - a.rating || (a.date < b.date ? 1 : -1); });
+    else l.sort(function (a, b) { return a.name.localeCompare(b.name, "ja"); });
+    return l;
+  }
+  function listItems(ul, items) {
+    ul.innerHTML = "";
+    items.forEach(function (t) { var li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+  }
+
+  function renderCards() {
+    var container = document.getElementById("cards");
+    var empty = document.getElementById("empty-state");
+    var filtered = sortList(saunas.filter(matches));
+    document.getElementById("result-count").textContent = filtered.length + " 件表示中";
+    container.innerHTML = "";
+    if (!filtered.length) { empty.hidden = false; return; }
+    empty.hidden = true;
+    filtered.forEach(function (s) {
+      var card = document.createElement("article");
+      card.className = "card";
+      card.id = "card-" + s.id;
+
+      var head = document.createElement("div");
+      head.className = "card-head";
+      var titleWrap = document.createElement("div");
+      var h3 = document.createElement("h3");
+      h3.className = "card-title";
+      var a = document.createElement("a");
+      a.href = s.url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = s.name;
+      h3.appendChild(a);
+      var tags = document.createElement("p");
+      tags.className = "card-tags";
+      var prefTag = document.createElement("span");
+      prefTag.className = "pref-tag"; prefTag.textContent = s.pref;
+      tags.appendChild(prefTag);
+      tags.appendChild(document.createTextNode(" ・ " + s.region));
+      titleWrap.appendChild(h3); titleWrap.appendChild(tags);
+
+      var ratingBlock = document.createElement("div");
+      ratingBlock.className = "rating-block";
+      var ratingLabel = document.createElement("span");
+      ratingLabel.className = "rating-label"; ratingLabel.textContent = "イキタイ度";
+      var rating = document.createElement("div");
+      rating.className = "rating";
+      var dropsHtml = "";
+      for (var i = 1; i <= 5; i++) dropsHtml += dropIcon(i <= s.rating);
+      rating.innerHTML = dropsHtml + '<span class="rating-num">' + s.rating + "/5</span>";
+      ratingBlock.appendChild(ratingLabel); ratingBlock.appendChild(rating);
+
+      head.appendChild(titleWrap); head.appendChild(ratingBlock);
+      card.appendChild(head);
+
+      var body = document.createElement("div");
+      body.className = "card-body";
+      var good = document.createElement("div");
+      good.className = "good"; good.innerHTML = "<h4>良かった点</h4>";
+      var goodUl = document.createElement("ul"); listItems(goodUl, s.good.length ? s.good : ["-"]); good.appendChild(goodUl);
+      var bad = document.createElement("div");
+      bad.className = "bad"; bad.innerHTML = "<h4>気になった点</h4>";
+      var badUl = document.createElement("ul"); listItems(badUl, s.bad.length ? s.bad : ["-"]); bad.appendChild(badUl);
+      body.appendChild(good); body.appendChild(bad);
+      card.appendChild(body);
+
+      var meta = document.createElement("div");
+      meta.className = "card-meta";
+      var left = document.createElement("span");
+      left.textContent = "報告日: " + s.date + (s.poster ? " ・ 投稿: " + s.poster : "");
+      var gmapLink = document.createElement("a");
+      gmapLink.className = "gmap-link"; gmapLink.target = "_blank"; gmapLink.rel = "noopener noreferrer";
+      gmapLink.href = "https://www.google.com/maps/search/?api=1&query=" + (s.lat && s.lng ? s.lat + "," + s.lng : encodeURIComponent(s.name + " " + s.pref + " " + s.region));
+      gmapLink.textContent = "Google Mapsで見る ↗";
+      meta.appendChild(left); meta.appendChild(gmapLink);
+      card.appendChild(meta);
+
+      container.appendChild(card);
+    });
+  }
+
+  function focusCard(id) {
+    var s = saunas.find(function (x) { return x.id === id; });
+    if (!s) return;
+    if (state.pref !== s.pref) applyFilterState(s.pref);
+    requestAnimationFrame(function () {
+      var el = document.getElementById("card-" + id);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("is-flash");
+      setTimeout(function () { el.classList.remove("is-flash"); }, 1600);
+    });
+  }
+
+  function renderPrefSelect() {
+    prefSelect.innerHTML = "";
+    var names = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
+    var allOpt = document.createElement("option");
+    allOpt.value = ""; allOpt.textContent = "都道府県: すべて";
+    prefSelect.appendChild(allOpt);
+    names.forEach(function (name) {
+      var opt = document.createElement("option");
+      opt.value = name; opt.textContent = name + "(" + counts[name] + ")";
+      prefSelect.appendChild(opt);
+    });
+  }
+
+  function renderStats() {
+    var row = document.getElementById("stat-row");
+    row.innerHTML = "";
+    var total = saunas.length;
+    var prefCount = Object.keys(counts).length;
+    var avg = total ? (saunas.reduce(function (a, s) { return a + s.rating; }, 0) / total).toFixed(1) : "-";
+    [[total, "掲載施設"], [prefCount, "掲載都道府県"], [avg, "平均イキタイ度"]].forEach(function (t) {
+      var d = document.createElement("div");
+      d.className = "stat-tile";
+      d.innerHTML = '<span class="num">' + t[0] + '</span><span class="lbl">' + t[1] + "</span>";
+      row.appendChild(d);
+    });
+  }
+
+  fetch("data.json").then(function (r) { return r.json(); }).then(function (json) {
+    saunas = json;
+    counts = {};
+    saunas.forEach(function (s) { counts[s.pref] = (counts[s.pref] || 0) + 1; });
+    renderPrefLayer();
+    renderMarkers();
+    renderPrefSelect();
+    renderStats();
+    setStatus();
+    renderCards();
+  });
+})();
+</script>
+</body>
+</html>
