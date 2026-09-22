@@ -19,6 +19,7 @@
     --accent-strong: #123f78;
     --warn: #a8451c;
     --warn-strong: #7d3212;
+    --select: #d7362b;
     --ramp-0: #e1e9f1;
     --ramp-1: #83aedb;
     --ramp-2: #5c93cf;
@@ -43,6 +44,7 @@
       --accent-strong: #9ccbff;
       --warn: #ff9a5c;
       --warn-strong: #ffb587;
+      --select: #ff6b5c;
       --ramp-0: #1c2836;
       --ramp-1: #2c4a6e;
       --ramp-2: #3f6690;
@@ -190,10 +192,10 @@
   .cards { display: flex; flex-direction: column; gap: 14px; }
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 16px 18px; box-shadow: var(--shadow); scroll-margin-top: 16px;
-    transition: border-color 0.4s ease, box-shadow 0.4s ease;
+    padding: 16px 18px; box-shadow: var(--shadow); scroll-margin-top: 16px; cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
-  .card.is-flash { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .card.is-selected { border-color: var(--select); box-shadow: 0 0 0 3px color-mix(in srgb, var(--select) 25%, transparent); }
   .card-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .card-title { font-family: var(--serif); font-size: 17px; font-weight: 600; margin: 0; }
   .card-title a { color: inherit; text-decoration: none; }
@@ -300,6 +302,7 @@
   var prefLayer = null;
   var prefLayers = {};
   var markerById = {};
+  var selectedId = null;
   var prefSelect = document.getElementById("pref-select");
 
   function escapeHtml(s) {
@@ -366,7 +369,7 @@
         '<p class="popup-tags">' + escapeHtml(s.pref) + " ・ " + escapeHtml(s.region) + "</p>" +
         ratingHtml(s.rating, "popup-rating");
       marker.bindPopup(popup);
-      marker.on("click", function () { focusCard(s.id); });
+      marker.on("click", function () { selectSauna(s.id); });
       marker.addTo(map);
       markerById[s.id] = marker;
     });
@@ -433,8 +436,12 @@
     empty.hidden = true;
     filtered.forEach(function (s) {
       var card = document.createElement("article");
-      card.className = "card";
+      card.className = "card" + (s.id === selectedId ? " is-selected" : "");
       card.id = "card-" + s.id;
+      card.addEventListener("click", function (e) {
+        if (e.target.closest("a")) return;
+        selectSauna(s.id);
+      });
 
       var head = document.createElement("div");
       head.className = "card-head";
@@ -492,17 +499,34 @@
     });
   }
 
-  function focusCard(id) {
+  function selectSauna(id) {
     var s = saunas.find(function (x) { return x.id === id; });
     if (!s) return;
-    if (state.pref !== s.pref) applyFilterState(s.pref);
+    selectedId = id;
+
+    Object.keys(markerById).forEach(function (mid) {
+      markerById[mid].setStyle({ fillColor: getVar("--accent"), radius: 7 });
+    });
+    var marker = markerById[id];
+    if (marker) {
+      marker.setStyle({ fillColor: getVar("--select"), radius: 9 });
+      marker.bringToFront();
+      map.panTo(marker.getLatLng());
+    }
+
+    if (state.pref && state.pref !== s.pref) applyFilterState(s.pref);
+    markSelectedCard();
     requestAnimationFrame(function () {
       var el = document.getElementById("card-" + id);
-      if (!el) return;
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("is-flash");
-      setTimeout(function () { el.classList.remove("is-flash"); }, 1600);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     });
+  }
+
+  function markSelectedCard() {
+    document.querySelectorAll(".card.is-selected").forEach(function (el) { el.classList.remove("is-selected"); });
+    if (selectedId == null) return;
+    var el = document.getElementById("card-" + selectedId);
+    if (el) el.classList.add("is-selected");
   }
 
   function renderPrefSelect() {
