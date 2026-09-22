@@ -119,41 +119,6 @@
   }
   .stat-tile .lbl { font-size: 11px; color: var(--ink-muted); letter-spacing: 0.04em; }
 
-  .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-  .register-btn {
-    font-family: var(--sans); font-size: 13px; font-weight: 600; padding: 9px 16px;
-    border-radius: 9px; border: 1px solid var(--accent); background: var(--accent);
-    color: #fff; cursor: pointer;
-  }
-  .register-btn:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
-
-  dialog#register-dialog {
-    border: 1px solid var(--border); border-radius: var(--radius); padding: 0;
-    background: var(--surface); color: var(--ink); width: min(560px, 92vw);
-    box-shadow: var(--shadow);
-  }
-  dialog#register-dialog::backdrop { background: rgba(13, 20, 32, 0.55); }
-  #register-form { padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; }
-  #register-form h2 { font-family: var(--serif); font-size: 20px; margin: 0; }
-  .dialog-note { font-size: 12.5px; color: var(--ink-muted); margin: 0 0 4px; line-height: 1.6; }
-  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
-  .field em { font-style: normal; color: var(--warn); font-size: 11px; margin-left: 4px; }
-  .field input, .field select, .field textarea {
-    font-family: var(--sans); font-size: 14px; padding: 8px 10px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--bg); color: var(--ink); resize: vertical;
-  }
-  .field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible {
-    outline: 2px solid var(--accent); outline-offset: 1px;
-  }
-  .field-error { color: var(--warn); font-size: 12px; margin: -6px 0 0; }
-  .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
-  .dialog-actions button {
-    font-family: var(--sans); font-size: 13px; padding: 9px 16px; border-radius: 9px; cursor: pointer;
-  }
-  #register-cancel { border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); }
-  #register-submit { border: 1px solid var(--accent); background: var(--accent); color: #fff; font-weight: 600; }
-  #register-submit:hover { background: var(--accent-strong); }
-
   main.layout {
     display: grid;
     grid-template-columns: minmax(320px, 46%) 1fr;
@@ -276,68 +241,8 @@
       <h1>日本全国サウナMAP</h1>
       <p class="desc">部員の活動報告フォームから集計した、全国のサウナ・温泉施設レポート集。実際の地図(OpenStreetMap)上のピンかリストから気になる一軒を探せます。</p>
     </div>
-    <div class="header-right">
-      <div class="stat-row" id="stat-row"></div>
-      <button type="button" class="register-btn" id="register-btn">＋ サウナを登録する</button>
-    </div>
+    <div class="stat-row" id="stat-row"></div>
   </header>
-
-  <dialog id="register-dialog">
-    <form id="register-form">
-      <h2>サウナを登録する</h2>
-      <p class="dialog-note">入力内容でGitHubの登録画面を開きます。内容を確認して送信すると、数分でこのマップに反映されます(GitHubアカウントでのログインが必要です)。</p>
-
-      <label class="field">
-        <span>部内パスワード</span>
-        <input type="password" id="reg-password" required autocomplete="off" />
-      </label>
-      <p class="field-error" id="reg-password-error" hidden>パスワードが違います。</p>
-
-      <label class="field">
-        <span>施設名 <em>必須</em></span>
-        <input type="text" id="reg-name" required />
-      </label>
-      <label class="field">
-        <span>都道府県 <em>必須</em></span>
-        <input type="text" id="reg-pref" required />
-      </label>
-      <label class="field">
-        <span>地域(市区町村や俗称)</span>
-        <input type="text" id="reg-region" />
-      </label>
-      <label class="field">
-        <span>施設URL</span>
-        <input type="url" id="reg-url" placeholder="https://" />
-      </label>
-      <label class="field">
-        <span>良かった点(1行に1つ)</span>
-        <textarea id="reg-good" rows="3"></textarea>
-      </label>
-      <label class="field">
-        <span>気になった点(1行に1つ)</span>
-        <textarea id="reg-bad" rows="3"></textarea>
-      </label>
-      <label class="field">
-        <span>またイキタイ度 <em>必須</em></span>
-        <select id="reg-rating" required>
-          <option value="5">5</option>
-          <option value="4">4</option>
-          <option value="3">3</option>
-          <option value="2">2</option>
-          <option value="1">1</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>お名前(自動的に匿名化されます)</span>
-        <input type="text" id="reg-poster" />
-      </label>
-
-      <div class="dialog-actions">
-        <button type="button" id="register-cancel">キャンセル</button>
-        <button type="submit" id="register-submit">GitHubで登録画面を開く</button>
-      </div>
-    </form>
-  </dialog>
 
   <main class="layout">
     <section class="map-panel">
@@ -501,52 +406,6 @@
     document.getElementById("search-input").value = "";
     state.query = "";
     applyFilterState("");
-  });
-
-  /* ---------- registration (opens a pre-filled GitHub issue) ---------- */
-  var GITHUB_OWNER = "twashinoue-commits";
-  var GITHUB_REPO = "sauna-map-site";
-  var CLUB_PASSWORD = "CHANGE_ME";
-
-  var registerDialog = document.getElementById("register-dialog");
-  var registerForm = document.getElementById("register-form");
-  var passwordError = document.getElementById("reg-password-error");
-
-  document.getElementById("register-btn").addEventListener("click", function () {
-    passwordError.hidden = true;
-    registerForm.reset();
-    registerDialog.showModal();
-  });
-  document.getElementById("register-cancel").addEventListener("click", function () {
-    registerDialog.close();
-  });
-  registerDialog.addEventListener("click", function (e) {
-    if (e.target === registerDialog) registerDialog.close();
-  });
-
-  registerForm.addEventListener("submit", function (e) {
-    e.preventDefault();
-    var password = document.getElementById("reg-password").value;
-    if (password !== CLUB_PASSWORD) {
-      passwordError.hidden = false;
-      return;
-    }
-    passwordError.hidden = true;
-
-    var params = new URLSearchParams({
-      template: "new-sauna.yml",
-      facility_name: document.getElementById("reg-name").value.trim(),
-      pref: document.getElementById("reg-pref").value.trim(),
-      region: document.getElementById("reg-region").value.trim(),
-      url: document.getElementById("reg-url").value.trim(),
-      good: document.getElementById("reg-good").value.trim(),
-      bad: document.getElementById("reg-bad").value.trim(),
-      rating: document.getElementById("reg-rating").value,
-      poster: document.getElementById("reg-poster").value.trim()
-    });
-    var issueUrl = "https://github.com/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/issues/new?" + params.toString();
-    window.open(issueUrl, "_blank", "noopener,noreferrer");
-    registerDialog.close();
   });
 
   function matches(s) {
