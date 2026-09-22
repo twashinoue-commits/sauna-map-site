@@ -1,0 +1,88 @@
+name: Process sauna registration issue
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  process:
+    if: >
+      contains(github.event.issue.labels.*.name, 'sauna-entry') &&
+      !contains(github.event.issue.labels.*.name, 'processed')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run processor
+        id: run
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          node scripts/process_issue.js > result.json
+          cat result.json
+
+      - name: Read result
+        id: result
+        run: |
+          echo "ok=$(node -e "console.log(JSON.parse(require('fs').readFileSync('result.json','utf8')).ok)")" >> "$GITHUB_OUTPUT"
+          echo "reason=$(node -e "console.log(JSON.parse(require('fs').readFileSync('result.json','utf8')).reason || '')")" >> "$GITHUB_OUTPUT"
+          echo "geocoded=$(node -e "console.log(JSON.parse(require('fs').readFileSync('result.json','utf8')).geocoded || false)")" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        if: steps.result.outputs.ok == 'true'
+        run: |
+          git config user.name "sauna-map-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data.json
+          if [ -f poster-map.json ]; then git add poster-map.json; fi
+          git commit -m "Add sauna entry from issue #${{ github.event.issue.number }}"
+          git push
+
+      - name: Comment success and close
+        if: steps.result.outputs.ok == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const geocoded = '${{ steps.result.outputs.geocoded }}' === 'true';
+            const note = geocoded
+              ? '住所から緯度経度を自動取得しました。'
+              : '住所が特定できなかったため、地図上は都道府県の中心付近に仮表示されます(手動で調整が必要な場合はコメントしてください)。';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '✅ マップに反映しました。' + note + ' GitHub Pagesの更新まで数分かかることがあります。'
+            });
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['processed']
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed'
+            });
+
+      - name: Comment failure
+        if: steps.result.outputs.ok == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '⚠️ 反映できませんでした: ${{ steps.result.outputs.reason }}\n\nこのIssueを編集して保存すると、再度チェックされます。'
+            });
