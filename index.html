@@ -164,6 +164,7 @@
   .legend .group { display: flex; align-items: center; gap: 6px; }
   .legend .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
   .legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background: var(--accent); border: 1.4px solid #fff; }
+  .legend .dot-approx { background: #fff; border: 1.6px dashed var(--accent); }
   .map-note { margin-top: 10px; font-size: 11px; color: var(--ink-muted); }
 
   .list-panel { min-width: 0; }
@@ -258,6 +259,7 @@
         <div class="group"><span class="swatch" style="background:var(--ramp-3)"></span>4〜6件</div>
         <div class="group"><span class="swatch" style="background:var(--ramp-4)"></span>7件〜</div>
         <div class="group"><span class="dot"></span>施設ピン</div>
+        <div class="group"><span class="dot dot-approx"></span>位置は概算</div>
       </div>
       <p class="map-note">実際のストリートマップです。ホイールでズーム、ドラッグで移動できます。都道府県をクリックすると拡大＋一覧を絞り込みます。</p>
     </section>
@@ -280,8 +282,8 @@
   </main>
 
   <footer class="credit">
-    <span>出典: サウナ部 活動報告フォーム回答 ／ 地図データ: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors ／ 更新はClaudeに新しいCSVを渡して再デプロイします</span>
-    <span id="updated-at">最終更新: 2026年9月22日</span>
+    <span>出典: サウナ部 活動報告フォーム回答 ／ 地図データ: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors ／ フォームの回答は自動でこのページに反映されます</span>
+    <span id="updated-at"></span>
   </footer>
 </div>
 
@@ -357,16 +359,20 @@
     });
   }
 
+  function baseMarkerStyle(s) {
+    return s.approx
+      ? { radius: 7, color: getVar("--accent"), weight: 2, dashArray: "3 3", fillColor: "#fff", fillOpacity: 1 }
+      : { radius: 7, color: "#fff", weight: 2, dashArray: null, fillColor: getVar("--accent"), fillOpacity: 1 };
+  }
+
   function renderMarkers() {
     Object.values(markerById).forEach(function (m) { map.removeLayer(m); });
     markerById = {};
     saunas.forEach(function (s) {
       if (!s.lat || !s.lng) return;
-      var marker = L.circleMarker([s.lat, s.lng], {
-        radius: 7, color: "#fff", weight: 2, fillColor: getVar("--accent"), fillOpacity: 1
-      });
+      var marker = L.circleMarker([s.lat, s.lng], baseMarkerStyle(s));
       var popup = '<p class="popup-title"><a href="' + escapeHtml(s.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(s.name) + "</a></p>" +
-        '<p class="popup-tags">' + escapeHtml(s.pref) + " ・ " + escapeHtml(s.region) + "</p>" +
+        '<p class="popup-tags">' + escapeHtml(s.pref) + " ・ " + escapeHtml(s.region) + (s.approx ? "(位置は概算)" : "") + "</p>" +
         ratingHtml(s.rating, "popup-rating");
       marker.bindPopup(popup);
       marker.on("click", function () { selectSauna(s.id); });
@@ -504,12 +510,12 @@
     if (!s) return;
     selectedId = id;
 
-    Object.keys(markerById).forEach(function (mid) {
-      markerById[mid].setStyle({ fillColor: getVar("--accent"), radius: 7 });
+    saunas.forEach(function (x) {
+      if (markerById[x.id]) markerById[x.id].setStyle(baseMarkerStyle(x));
     });
     var marker = markerById[id];
     if (marker) {
-      marker.setStyle({ fillColor: getVar("--select"), radius: 9 });
+      marker.setStyle({ fillColor: getVar("--select"), color: "#fff", dashArray: null, radius: 9 });
       marker.bringToFront();
       map.panTo(marker.getLatLng());
     }
@@ -564,6 +570,8 @@
     renderMarkers();
     renderPrefSelect();
     renderStats();
+    var latest = saunas.reduce(function (m, s) { return s.date > m ? s.date : m; }, "");
+    document.getElementById("updated-at").textContent = latest ? "最新の報告: " + latest.replace(/-/g, "/") : "";
     setStatus();
     renderCards();
   });
